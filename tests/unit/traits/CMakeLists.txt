@@ -5,6 +5,7 @@
 
 set(tests
     is_callable
+    is_range
    )
 
 foreach(test ${tests})

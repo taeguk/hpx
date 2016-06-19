@@ -11,6 +11,7 @@ set(tests
     config_entry
     function
     parse_slurm_nodelist
+    range
     tagged
     tuple
    )
