@@ -8,12 +8,11 @@
 #include <hpx/include/parallel_executors.hpp>
 #include <hpx/util/lightweight_test.hpp>
 
-#include <boost/range/functions.hpp>
-
 #include <algorithm>
 #include <chrono>
 #include <cstdlib>
 #include <functional>
+#include <iterator>
 #include <string>
 #include <utility>
 #include <type_traits>
