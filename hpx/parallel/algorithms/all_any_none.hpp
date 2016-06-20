@@ -10,6 +10,7 @@
 
 #include <hpx/config.hpp>
 #include <hpx/traits/is_iterator.hpp>
+#include <hpx/util/range.hpp>
 #include <hpx/util/void_guard.hpp>
 
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
@@ -19,8 +20,6 @@
 #include <hpx/parallel/util/loop.hpp>
 #include <hpx/parallel/util/partitioner.hpp>
 #include <hpx/util/unused.hpp>
-
-#include <boost/range/functions.hpp>
 
 #include <algorithm>
 #include <cstddef>
@@ -89,7 +88,7 @@ namespace hpx { namespace parallel { HPX_INLINE_NAMESPACE(v1)
                     [](std::vector<hpx::future<bool> > && results)
                     {
                         return std::all_of(
-                            boost::begin(results), boost::end(results),
+                            hpx::util::begin(results), hpx::util::end(results),
                             [](hpx::future<bool>& val)
                             {
                                 return val.get();
@@ -237,7 +236,7 @@ namespace hpx { namespace parallel { HPX_INLINE_NAMESPACE(v1)
                     [](std::vector<hpx::future<bool> > && results)
                     {
                         return std::any_of(
-                            boost::begin(results), boost::end(results),
+                            hpx::util::begin(results), hpx::util::end(results),
                             [](hpx::future<bool>& val)
                             {
                                 return val.get();
@@ -384,7 +383,7 @@ namespace hpx { namespace parallel { HPX_INLINE_NAMESPACE(v1)
                     [](std::vector<hpx::future<bool> > && results)
                     {
                         return std::all_of(
-                            boost::begin(results), boost::end(results),
+                            hpx::util::begin(results), hpx::util::end(results),
                             [](hpx::future<bool>& val)
                             {
                                 return val.get();
