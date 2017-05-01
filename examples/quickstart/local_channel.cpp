@@ -63,6 +63,22 @@ void pingpong()
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+void pingpong1()
+{
+    hpx::lcos::local::one_element_channel<std::string> pings;
+    hpx::lcos::local::one_element_channel<std::string> pongs;
+
+    for (int i = 0; i != 10; ++i)
+    {
+        ping(pings, "passed message");
+        pong(pings, pongs);
+        pongs.get(hpx::launch::sync);
+    }
+
+    hpx::cout << "ping-ponged 10 times\n";
+}
+
+///////////////////////////////////////////////////////////////////////////////
 void dispatch_work()
 {
     hpx::lcos::local::channel<int> jobs;
@@ -118,6 +134,7 @@ int main(int argc, char* argv[])
 {
     calculate_sum();
     pingpong();
+    pingpong1();
     dispatch_work();
     channel_range();
 
