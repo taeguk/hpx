@@ -354,6 +354,7 @@ namespace hpx { namespace lcos { namespace local
 
     ///////////////////////////////////////////////////////////////////////////
     template <typename T = void> class channel;
+    template <typename T = void> class one_element_channel;
     template <typename T = void> class receive_channel;
     template <typename T = void> class send_channel;
 
@@ -498,7 +499,7 @@ namespace hpx { namespace lcos { namespace local
         friend class send_channel<T>;
 
     public:
-        typename T value_type;
+        typedef T value_type;
 
         channel()
           : base_type(new detail::unlimited_channel<T>())
@@ -525,7 +526,7 @@ namespace hpx { namespace lcos { namespace local
         friend class send_channel<T>;
 
     public:
-        typename T value_type;
+        typedef T value_type;
 
         one_element_channel()
           : base_type(new detail::one_element_channel<T>())
@@ -743,6 +744,8 @@ namespace hpx { namespace lcos { namespace local
         friend class send_channel<void>;
 
     public:
+        typedef void value_type;
+
         channel()
           : base_type(new detail::unlimited_channel<util::unused_type>())
         {}
@@ -767,6 +770,8 @@ namespace hpx { namespace lcos { namespace local
         friend class send_channel<void>;
 
     public:
+        typedef void value_type;
+
         one_element_channel()
           : base_type(new detail::one_element_channel<util::unused_type>())
         {}
