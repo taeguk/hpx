@@ -102,6 +102,11 @@ namespace hpx { namespace lcos { namespace local
             invoke_impl(std::is_void<R>(), std::forward<Ts>(vs)...);
         }
 
+        void set_exception(boost::exception_ptr const& e)
+        {
+            promise_.set_exception(e);
+        }
+
         // result retrieval
         lcos::future<R> get_future(error_code& ec = throws)
         {

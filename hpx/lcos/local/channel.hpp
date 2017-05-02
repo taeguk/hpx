@@ -10,6 +10,7 @@
 #include <hpx/exception.hpp>
 #include <hpx/lcos/future.hpp>
 #include <hpx/lcos/local/no_mutex.hpp>
+#include <hpx/lcos/local/packaged_task.hpp>
 #include <hpx/lcos/local/receive_buffer.hpp>
 #include <hpx/lcos/local/spinlock.hpp>
 #include <hpx/runtime/launch_policy.hpp>
@@ -48,7 +49,7 @@ namespace hpx { namespace lcos { namespace local
                 bool blocking = false) = 0;
             virtual bool try_get(std::size_t generation,
                 hpx::future<T>* f = nullptr) = 0;
-            virtual void set(std::size_t generation, T && t) = 0;
+            virtual hpx::future<void> set(std::size_t generation, T && t) = 0;
             virtual void close() = 0;
 
             virtual bool requires_delete()
@@ -163,16 +164,16 @@ namespace hpx { namespace lcos { namespace local
                 return true;
             }
 
-            void set(std::size_t generation, T && t)
+            hpx::future<void> set(std::size_t generation, T && t)
             {
                 std::unique_lock<mutex_type> l(mtx_);
                 if(closed_)
                 {
                     l.unlock();
-                    HPX_THROW_EXCEPTION(hpx::invalid_status,
-                        "hpx::lcos::local::channel::set",
-                        "attempting to write to a closed channel");
-                    return;
+                    return hpx::make_exceptional_future<void>(
+                        HPX_GET_EXCEPTION(hpx::invalid_status,
+                            "hpx::lcos::local::channel::set",
+                            "attempting to write to a closed channel"));
                 }
 
                 ++set_generation_;
@@ -180,6 +181,7 @@ namespace hpx { namespace lcos { namespace local
                     generation = set_generation_;
 
                 buffer_.store_received(generation, std::move(t), &l);
+                return hpx::make_ready_future();
             }
 
             void close()
@@ -223,6 +225,119 @@ namespace hpx { namespace lcos { namespace local
 
         ///////////////////////////////////////////////////////////////////////
         template <typename T>
+        class one_element_queue_async
+        {
+            HPX_NON_COPYABLE(one_element_queue_async);
+
+            template <typename T1>
+            void set(T1 && val)
+            {
+                val_ = std::forward<T1>(val);
+                empty_ = false;
+            }
+            void set_deferred(T && val)
+            {
+                val_ = std::move(val);
+                empty_ = false;
+            }
+
+            T get()
+            {
+                empty_ = true;
+                return std::move(val_);
+            }
+
+            template <typename T1>
+            local::packaged_task<void()> push_pt(T1 && val)
+            {
+                return local::packaged_task<void()>(
+                    util::deferred_call(
+                        &one_element_queue_async::set_deferred, this,
+                        std::forward<T1>(val)));
+            }
+            local::packaged_task<T()> pop_pt()
+            {
+                return local::packaged_task<T()>(
+                    util::deferred_call(&one_element_queue_async::get, this));
+            }
+
+        public:
+            one_element_queue_async()
+              : empty_(true), push_pt_active_(false), pop_pt_active_(false)
+            {}
+
+            template <typename T1>
+            hpx::future<void> push(T1 && val)
+            {
+                if (!empty_)
+                {
+                    if (push_pt_active_)
+                    {
+                        // error!
+                    }
+
+                    push_pt_ = push_pt(std::forward<T1>(val));
+                    push_pt_active_ = true;
+                    return push_pt_.get_future();
+                }
+
+                set(std::forward<T1>(val));
+                if (pop_pt_active_)
+                {
+                    pop_pt_();                          // trigger waiting pop
+                    pop_pt_active_ = false;
+                }
+                return hpx::make_ready_future();
+            }
+
+            void cancel(boost::exception_ptr const& e)
+            {
+                if (pop_pt_active_)
+                {
+                    pop_pt_.set_exception(e);
+                    pop_pt_active_ = false;
+                }
+            }
+
+            hpx::future<T> pop()
+            {
+                if (empty_)
+                {
+                    if (pop_pt_active_)
+                    {
+                        // error!
+                    }
+
+                    pop_pt_ = pop_pt();
+                    pop_pt_active_ = true;
+                    return pop_pt_.get_future();
+                }
+
+                T val = get();
+                if (push_pt_active_)
+                {
+                    push_pt_();                        // trigger waiting push
+                    push_pt_active_ = false;
+                }
+                return hpx::make_ready_future(val);
+            }
+
+            bool is_empty() const
+            {
+                return empty_;
+            }
+
+        private:
+            T val_;
+            local::packaged_task<void()> push_pt_;
+            local::packaged_task<T()> pop_pt_;
+            bool empty_;
+            bool push_pt_active_;
+            bool pop_pt_active_;
+        };
+
+        ///////////////////////////////////////////////////////////////////////
+        template <typename T>
         class one_element_channel : public channel_impl_base<T>
         {
             typedef hpx::lcos::local::spinlock mutex_type;
@@ -231,7 +346,7 @@ namespace hpx { namespace lcos { namespace local
 
         public:
             one_element_channel()
-              : empty_(true), closed_(false)
+              : closed_(false)
             {}
 
         protected:
@@ -239,7 +354,7 @@ namespace hpx { namespace lcos { namespace local
             {
                 std::unique_lock<mutex_type> l(mtx_);
 
-                if (empty_)
+                if (buffer_.is_empty())
                 {
                     if (closed_)
                     {
@@ -261,7 +376,7 @@ namespace hpx { namespace lcos { namespace local
                     }
                 }
 
-                hpx::future<T> f = buffer_.get_future();
+                hpx::future<T> f = buffer_.pop();
                 if (closed_ && !f.is_ready())
                 {
                     // the requested item must be available, otherwise this
@@ -274,8 +389,6 @@ namespace hpx { namespace lcos { namespace local
                             "has not been received yet"));
                 }
 
-                buffer_ = lcos::local::promise<T>();        // reset promise
-                empty_ = true;
                 return f;
             }
 
@@ -283,42 +396,37 @@ namespace hpx { namespace lcos { namespace local
             {
                 std::lock_guard<mutex_type> l(mtx_);
 
-                if (empty_ && closed_)
+                if (buffer_.is_empty() && closed_)
                     return false;
 
                 if (f != nullptr)
                 {
-                    *f = buffer_.get_future();
-                    buffer_ = lcos::local::promise<T>();    // reset promise
-                    empty_ = true;
+                    *f = buffer_.pop();
                 }
                 return true;
             }
 
-            void set(std::size_t, T && t)
+            hpx::future<void> set(std::size_t, T && t)
             {
                 std::unique_lock<mutex_type> l(mtx_);
-                util::ignore_while_checking<std::unique_lock<mutex_type> > i(&l);
 
-                if(closed_)
+                if (closed_)
                 {
                     l.unlock();
-                    HPX_THROW_EXCEPTION(hpx::invalid_status,
-                        "hpx::lcos::local::channel::set",
-                        "attempting to write to a closed channel");
-                    return;
+                    return hpx::make_exceptional_future<void>(
+                        HPX_GET_EXCEPTION(hpx::invalid_status,
+                            "hpx::lcos::local::channel::set",
+                            "attempting to write to a closed channel"));
                 }
 
-                buffer_.set_value(std::move(t));
-                empty_ = false;
+                return buffer_.push(std::move(t));
             }
 
             void close()
             {
                 std::unique_lock<mutex_type> l(mtx_);
-                util::ignore_while_checking<std::unique_lock<mutex_type> > i(&l);
 
-                if(closed_)
+                if (closed_)
                 {
                     l.unlock();
                     HPX_THROW_EXCEPTION(hpx::invalid_status,
@@ -329,12 +437,12 @@ namespace hpx { namespace lcos { namespace local
 
                 closed_ = true;
 
-                if (empty_)
+                if (buffer_.is_empty())
                     return;
 
                 // all pending requests which can't be satisfied have to be
                 // canceled at this point
-                buffer_.set_exception(boost::exception_ptr(
+                buffer_.cancel(boost::exception_ptr(
                         HPX_GET_EXCEPTION(hpx::future_cancelled,
                             "hpx::lcos::local::close",
                             "canceled waiting on this entry")
@@ -343,8 +451,7 @@ namespace hpx { namespace lcos { namespace local
 
         private:
             mutable mutex_type mtx_;
-            lcos::local::promise<T> buffer_;
-            bool empty_;
+            one_element_queue_async<T> buffer_;
             bool closed_;
         };
 
@@ -449,7 +556,17 @@ namespace hpx { namespace lcos { namespace local
             ///////////////////////////////////////////////////////////////////
             void set(T val, std::size_t generation = std::size_t(-1))
             {
-                channel_->set(generation, std::move(val));
+                channel_->set(generation, std::move(val)).get();
+            }
+            void set(launch::sync_policy, T val,
+                std::size_t generation = std::size_t(-1))
+            {
+                channel_->set(generation, std::move(val)).get();
+            }
+            hpx::future<void> set(launch::async_policy, T val,
+                std::size_t generation = std::size_t(-1))
+            {
+                return channel_->set(generation, std::move(val));
             }
 
             void close()
@@ -696,7 +813,17 @@ namespace hpx { namespace lcos { namespace local
             ///////////////////////////////////////////////////////////////////////
             void set(std::size_t generation = std::size_t(-1))
             {
-                channel_->set(generation, hpx::util::unused_type());
+                channel_->set(generation, hpx::util::unused_type()).get();
+            }
+            void set(launch::sync_policy,
+                std::size_t generation = std::size_t(-1))
+            {
+                channel_->set(generation, hpx::util::unused_type()).get();
+            }
+            hpx::future<void> set(launch::async_policy,
+                std::size_t generation = std::size_t(-1))
+            {
+                return channel_->set(generation, hpx::util::unused_type());
             }
 
             void close()

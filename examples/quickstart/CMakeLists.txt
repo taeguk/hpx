@@ -25,6 +25,7 @@ set(example_programs
     fibonacci_futures_distributed
     fractals
     fractals_struct
+    generator
     init_globally
     sierpinski
     interest_calculator

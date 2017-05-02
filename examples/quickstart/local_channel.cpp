@@ -3,7 +3,7 @@
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
-// This example demonstrates the use a a channel which is very similar to the
+// This example demonstrates the use of a channel which is very similar to the
 // equally named feature in the Go language.
 
 #include <hpx/hpx_main.hpp>
@@ -78,6 +78,32 @@ void pingpong1()
     hpx::cout << "ping-ponged 10 times\n";
 }
 
+void pingpong2()
+{
+    hpx::lcos::local::one_element_channel<std::string> pings;
+    hpx::lcos::local::one_element_channel<std::string> pongs;
+
+    ping(pings, "passed message");
+    hpx::future<void> f1 = hpx::async(
+        [=]() {
+            pong(pings, pongs);
+        });
+
+    ping(pings, "passed message");
+    hpx::future<void> f2 = hpx::async(
+        [=]() {
+            pong(pings, pongs);
+        });
+
+    pongs.get(hpx::launch::sync);
+    pongs.get(hpx::launch::sync);
+
+    f1.get();
+    f2.get();
+
+    hpx::cout << "ping-ponged with waiting\n";
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 void dispatch_work()
 {
@@ -135,6 +161,7 @@ int main(int argc, char* argv[])
     calculate_sum();
     pingpong();
     pingpong1();
+    pingpong2();
     dispatch_work();
     channel_range();
 
