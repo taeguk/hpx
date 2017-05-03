@@ -521,8 +521,86 @@ namespace hpx { namespace lcos { namespace local
     };
 
     ///////////////////////////////////////////////////////////////////////////
+    template <typename T>
+    class channel_async_iterator
+      : public hpx::util::iterator_facade<
+            channel_async_iterator<T>, hpx::future<T>, std::input_iterator_tag,
+            hpx::future<T>>
+    {
+        typedef hpx::util::iterator_facade<
+                channel_async_iterator<T>, hpx::future<T>,
+                std::input_iterator_tag, hpx::future<T>
+            > base_type;
+
+    public:
+        channel_async_iterator()
+          : channel_(nullptr), data_(hpx::future<T>(), false)
+        {}
+
+        inline explicit channel_async_iterator(detail::channel_base<T> const* c);
+
+    private:
+        std::pair<hpx::future<T>, bool> get_checked() const
+        {
+            hpx::future<T> f;
+            if (channel_->try_get(std::size_t(-1), &f))
+            {
+                return std::make_pair(std::move(f), true);
+            }
+            return std::make_pair(hpx::future<T>(), false);
+        }
+
+        friend class hpx::util::iterator_core_access;
+
+        bool equal(channel_async_iterator const& rhs) const
+        {
+            return (channel_ == rhs.channel_ && data_.second == rhs.data_.second) ||
+                (!data_.second && rhs.channel_ == nullptr) ||
+                (channel_ == nullptr && !rhs.data_.second);
+        }
+
+        void increment()
+        {
+            if (channel_)
+                data_ = get_checked();
+        }
+
+        typename base_type::reference dereference() const
+        {
+            HPX_ASSERT(data_.second);
+            return std::move(data_.first);
+        }
+
+    private:
+        boost::intrusive_ptr<detail::channel_impl_base<T> > channel_;
+        mutable std::pair<hpx::future<T>, bool> data_;
+    };
+
+    ///////////////////////////////////////////////////////////////////////////
     namespace detail
     {
+        template <typename T>
+        class channel_async_range
+        {
+        public:
+            explicit channel_async_range(channel_base<T> const& c)
+              : channel_(c)
+            {}
+
+            ///////////////////////////////////////////////////////////////////
+            channel_async_iterator<T> begin() const
+            {
+                return channel_async_iterator<T>(&channel_);
+            }
+            channel_async_iterator<T> end() const
+            {
+                return channel_async_iterator<T>();
+            }
+
+        private:
+            channel_base<T> const& channel_;
+        };
+
         template <typename T>
         class channel_base
         {
@@ -584,15 +662,20 @@ namespace hpx { namespace lcos { namespace local
                 return channel_iterator<T>();
             }
 
-            channel_iterator<T> rbegin() const
+            channel_base const& range() const
             {
-                return channel_iterator<T>(this);
+                return *this;
             }
-            channel_iterator<T> rend() const
+            channel_base const& range(launch::sync_policy) const
             {
-                return channel_iterator<T>();
+                return *this;
+            }
+            channel_async_range<T> range(launch::async_policy) const
+            {
+                return channel_async_range<T>(*this);
             }
 
+            ///////////////////////////////////////////////////////////////////
             channel_impl_base<T>* get_channel_impl() const
             {
                 return channel_.get();
@@ -627,8 +710,7 @@ namespace hpx { namespace lcos { namespace local
         using base_type::close;
         using base_type::begin;
         using base_type::end;
-        using base_type::rbegin;
-        using base_type::rend;
+        using base_type::range;
     };
 
     // channel with a one-element buffer
@@ -654,8 +736,7 @@ namespace hpx { namespace lcos { namespace local
         using base_type::close;
         using base_type::begin;
         using base_type::end;
-        using base_type::rbegin;
-        using base_type::rend;
+        using base_type::range;
     };
 
     ///////////////////////////////////////////////////////////////////////////
@@ -680,8 +761,7 @@ namespace hpx { namespace lcos { namespace local
         using base_type::get;
         using base_type::begin;
         using base_type::end;
-        using base_type::rbegin;
-        using base_type::rend;
+        using base_type::range;
     };
 
     ///////////////////////////////////////////////////////////////////////////
@@ -713,6 +793,13 @@ namespace hpx { namespace lcos { namespace local
     inline channel_iterator<T>::channel_iterator(receive_channel<T> const* c)
       : channel_(c ? c->get_channel_impl() : nullptr),
         data_(c ? get_checked() : std::make_pair(T(), false))
+    {}
+
+    template <typename T>
+    inline channel_async_iterator<T>::channel_async_iterator(
+            detail::channel_base<T> const* c)
+      : channel_(c ? c->get_channel_impl() : nullptr),
+        data_(c ? get_checked() : std::make_pair(hpx::future<T>(), false))
     {}
 
     ///////////////////////////////////////////////////////////////////////////
@@ -831,6 +918,7 @@ namespace hpx { namespace lcos { namespace local
                 channel_->close();
             }
 
+            ///////////////////////////////////////////////////////////////////
             channel_iterator<void> begin() const
             {
                 return channel_iterator<void>(this);
@@ -840,15 +928,20 @@ namespace hpx { namespace lcos { namespace local
                 return channel_iterator<void>();
             }
 
-            channel_iterator<void> rbegin() const
+            channel_base const& range() const
             {
-                return channel_iterator<void>(this);
+                return *this;
             }
-            channel_iterator<void> rend() const
+            channel_base const& range(launch::sync_policy) const
             {
-                return channel_iterator<void>();
+                return *this;
+            }
+            channel_async_range<void> range(launch::async_policy) const
+            {
+                return channel_async_range<void>(*this);
             }
 
+            ///////////////////////////////////////////////////////////////////
             channel_impl_base<util::unused_type>* get_channel_impl() const
             {
                 return channel_.get();
@@ -882,8 +975,7 @@ namespace hpx { namespace lcos { namespace local
         using base_type::close;
         using base_type::begin;
         using base_type::end;
-        using base_type::rbegin;
-        using base_type::rend;
+        using base_type::range;
     };
 
     template <>
@@ -908,8 +1000,7 @@ namespace hpx { namespace lcos { namespace local
         using base_type::close;
         using base_type::begin;
         using base_type::end;
-        using base_type::rbegin;
-        using base_type::rend;
+        using base_type::range;
     };
 
     ///////////////////////////////////////////////////////////////////////////
@@ -934,8 +1025,7 @@ namespace hpx { namespace lcos { namespace local
         using base_type::get;
         using base_type::begin;
         using base_type::end;
-        using base_type::rbegin;
-        using base_type::rend;
+        using base_type::range;
     };
 
     ///////////////////////////////////////////////////////////////////////////

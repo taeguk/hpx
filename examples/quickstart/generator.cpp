@@ -36,7 +36,7 @@
 // }
 
 ///////////////////////////////////////////////////////////////////////////////
-int main(int argc, char* argv[])
+void sync_generator()
 {
     hpx::lcos::local::one_element_channel<int> gen;
 
@@ -52,5 +52,30 @@ int main(int argc, char* argv[])
         std::cout << val << '\n';
 
     f.get();
+}
+
+void async_generator()
+{
+    hpx::lcos::local::one_element_channel<int> gen;
+
+    hpx::future<void> f =
+        hpx::async([=]() mutable
+        {
+            for (int i = 0; i != 10; ++i)
+                gen.set(i);
+            gen.close();
+        });
+
+    for (hpx::future<int> val : gen.range(hpx::launch::async))
+        std::cout << val.get() << '\n';
+
+    f.get();
+}
+
+int main(int argc, char* argv[])
+{
+    sync_generator();
+    async_generator();
+
     return 0;
 }
