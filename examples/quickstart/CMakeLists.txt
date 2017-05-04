@@ -25,7 +25,6 @@ set(example_programs
     fibonacci_futures_distributed
     fractals
     fractals_struct
-    generator
     init_globally
     sierpinski
     interest_calculator
@@ -49,6 +48,11 @@ set(example_programs
     wait_composition
     zerocopy_rdma
    )
+
+if(HPX_WITH_AWAIT)
+  set(example_programs ${example_programs} generator)
+  set(generator_FLAGS COMPONENT_DEPENDENCIES iostreams)
+endif()
 
 set(allow_unknown_options_FLAGS COMPONENT_DEPENDENCIES iostreams)
 set(command_line_handling_FLAGS COMPONENT_DEPENDENCIES iostreams)

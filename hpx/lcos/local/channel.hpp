@@ -234,16 +234,19 @@ namespace hpx { namespace lcos { namespace local
             {
                 val_ = std::forward<T1>(val);
                 empty_ = false;
+                push_pt_active_ = false;
             }
             void set_deferred(T && val)
             {
                 val_ = std::move(val);
                 empty_ = false;
+                push_pt_active_ = false;
             }
 
             T get()
             {
                 empty_ = true;
+                pop_pt_active_ = false;
                 return std::move(val_);
             }
 
@@ -266,8 +269,8 @@ namespace hpx { namespace lcos { namespace local
               : empty_(true), push_pt_active_(false), pop_pt_active_(false)
             {}
 
-            template <typename T1>
-            hpx::future<void> push(T1 && val)
+            template <typename T1, typename Lock>
+            hpx::future<void> push(T1 && val, Lock& l)
             {
                 if (!empty_)
                 {
@@ -284,8 +287,8 @@ namespace hpx { namespace lcos { namespace local
                 set(std::forward<T1>(val));
                 if (pop_pt_active_)
                 {
+                    util::scoped_unlock<Lock> ul(l);
                     pop_pt_();                          // trigger waiting pop
-                    pop_pt_active_ = false;
                 }
                 return hpx::make_ready_future();
             }
@@ -299,7 +302,8 @@ namespace hpx { namespace lcos { namespace local
                 }
             }
 
-            hpx::future<T> pop()
+            template <typename Lock>
+            hpx::future<T> pop(Lock& l)
             {
                 if (empty_)
                 {
@@ -316,8 +320,8 @@ namespace hpx { namespace lcos { namespace local
                 T val = get();
                 if (push_pt_active_)
                 {
+                    util::scoped_unlock<Lock> ul(l);
                     push_pt_();                        // trigger waiting push
-                    push_pt_active_ = false;
                 }
                 return hpx::make_ready_future(val);
             }
@@ -325,6 +329,11 @@ namespace hpx { namespace lcos { namespace local
             bool is_empty() const
             {
                 return empty_;
+            }
+
+            bool has_pending_request() const
+            {
+                return push_pt_active_;
             }
 
         private:
@@ -337,6 +346,11 @@ namespace hpx { namespace lcos { namespace local
         };
 
         ///////////////////////////////////////////////////////////////////////
+#if defined(HPX_HAVE_AWAIT)
+        template <typename T, typename Derived>
+        struct coroutine_generator_base;
+#endif
+
         template <typename T>
         class one_element_channel : public channel_impl_base<T>
         {
@@ -354,7 +368,7 @@ namespace hpx { namespace lcos { namespace local
             {
                 std::unique_lock<mutex_type> l(mtx_);
 
-                if (buffer_.is_empty())
+                if (buffer_.is_empty() && !buffer_.has_pending_request())
                 {
                     if (closed_)
                     {
@@ -376,7 +390,7 @@ namespace hpx { namespace lcos { namespace local
                     }
                 }
 
-                hpx::future<T> f = buffer_.pop();
+                hpx::future<T> f = buffer_.pop(l);
                 if (closed_ && !f.is_ready())
                 {
                     // the requested item must be available, otherwise this
@@ -394,14 +408,14 @@ namespace hpx { namespace lcos { namespace local
 
             bool try_get(std::size_t, hpx::future<T>* f = nullptr)
             {
-                std::lock_guard<mutex_type> l(mtx_);
+                std::unique_lock<mutex_type> l(mtx_);
 
-                if (buffer_.is_empty() && closed_)
+                if (buffer_.is_empty() && !buffer_.has_pending_request() && closed_)
                     return false;
 
                 if (f != nullptr)
                 {
-                    *f = buffer_.pop();
+                    *f = buffer_.pop(l);
                 }
                 return true;
             }
@@ -419,7 +433,7 @@ namespace hpx { namespace lcos { namespace local
                             "attempting to write to a closed channel"));
                 }
 
-                return buffer_.push(std::move(t));
+                return buffer_.push(std::move(t), l);
             }
 
             void close()
@@ -437,7 +451,7 @@ namespace hpx { namespace lcos { namespace local
 
                 closed_ = true;
 
-                if (buffer_.is_empty())
+                if (buffer_.is_empty() || !buffer_.has_pending_request())
                     return;
 
                 // all pending requests which can't be satisfied have to be
@@ -447,6 +461,15 @@ namespace hpx { namespace lcos { namespace local
                             "hpx::lcos::local::close",
                             "canceled waiting on this entry")
                     ));
+            }
+
+            void set_exception(boost::exception_ptr e)
+            {
+                std::unique_lock<mutex_type> l(mtx_);
+                closed_ = true;
+
+                if (!buffer_.is_empty())
+                    buffer_.cancel(e);
             }
 
         private:
@@ -604,11 +627,12 @@ namespace hpx { namespace lcos { namespace local
         template <typename T>
         class channel_base
         {
-        public:
+        protected:
             explicit channel_base(channel_impl_base<T>* impl)
               : channel_(impl)
             {}
 
+        public:
             ///////////////////////////////////////////////////////////////////
             hpx::future<T> get(launch::async_policy,
                 std::size_t generation = std::size_t(-1)) const
@@ -723,6 +747,15 @@ namespace hpx { namespace lcos { namespace local
         friend class channel_iterator<T>;
         friend class receive_channel<T>;
         friend class send_channel<T>;
+
+#if defined(HPX_HAVE_AWAIT)
+        template <typename T, typename Derived>
+        friend struct detail::coroutine_generator_base;
+
+        one_element_channel(detail::one_element_channel<T>* base)
+          : base_type(base)
+        {}
+#endif
 
     public:
         typedef T value_type;
@@ -1057,5 +1090,17 @@ namespace hpx { namespace lcos { namespace local
         data_(c ? get_checked() : false)
     {}
 }}}
+
+namespace hpx
+{
+    // We use the local one-element-channel as the return value for
+    // co_yield-based generators
+    template <typename T>
+    using generator = hpx::lcos::local::one_element_channel<T>;
+}
+
+#if defined(HPX_HAVE_AWAIT)
+#include <hpx/lcos/local/detail/generator_await_traits.hpp>
+#endif
 
 #endif
