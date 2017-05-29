@@ -18,6 +18,7 @@ set(subdirs
     jacobi
     jacobi_smp
     nqueen
+    parallel_algorithms
     performance_counters
     queue
     quickstart
