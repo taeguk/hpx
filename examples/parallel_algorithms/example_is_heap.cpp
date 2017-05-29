@@ -44,15 +44,35 @@ struct random_fill
     {}
 };
 
-double run_is_heap_until_element_benchmark_seq(int test_count, std::vector<int> const& v)
+///////////////////////////////////////////////////////////////////////////////
+double run_is_heap_until_element_benchmark_std(int test_count, std::vector<int> const& v)
 {
-    std::cout << "--- run_is_heap_until_element_benchmark_seq ---" << std::endl;
+    std::cout << "--- run_is_heap_until_element_benchmark_std ---" << std::endl;
     decltype(std::begin(v)) result;
     std::uint64_t time = hpx::util::high_resolution_clock::now();
 
     for (int i = 0; i != test_count; ++i)
     {
         result = std::is_heap_until(std::begin(v), std::end(v));
+    }
+
+    time = hpx::util::high_resolution_clock::now() - time;
+    std::cout << std::distance(std::begin(v), result) << std::endl;
+
+    return (time * 1e-9) / test_count;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+double run_is_heap_until_element_benchmark_seq(int test_count, std::vector<int> const& v)
+{
+    std::cout << "--- run_is_heap_until_element_benchmark_par ---" << std::endl;
+    decltype(std::begin(v)) result;
+    std::uint64_t time = hpx::util::high_resolution_clock::now();
+
+    for (int i = 0; i != test_count; ++i)
+    {
+        using namespace hpx::parallel;
+        result = is_heap_until(execution::seq, std::begin(v), std::end(v));
     }
 
     time = hpx::util::high_resolution_clock::now() - time;
@@ -81,6 +101,25 @@ double run_is_heap_until_element_benchmark_par(int test_count, std::vector<int> 
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+double run_is_heap_until_element_benchmark_par_unseq(int test_count, std::vector<int> const& v)
+{
+    std::cout << "--- run_is_heap_until_element_benchmark_par_unseq ---" << std::endl;
+    decltype(std::begin(v)) result;
+    std::uint64_t time = hpx::util::high_resolution_clock::now();
+
+    for (int i = 0; i != test_count; ++i)
+    {
+        using namespace hpx::parallel;
+        result = is_heap_until(execution::par_unseq, std::begin(v), std::end(v));
+    }
+
+    time = hpx::util::high_resolution_clock::now() - time;
+    std::cout << std::distance(std::begin(v), result) << std::endl;
+
+    return (time * 1e-9) / test_count;
+}
+
+///////////////////////////////////////////////////////////////////////////////
 int hpx_main(boost::program_options::variables_map& vm)
 {
     unsigned int seed = (unsigned int)std::time(nullptr);
@@ -92,21 +131,34 @@ int hpx_main(boost::program_options::variables_map& vm)
 
     // pull values from cmd
     std::size_t size = vm["vector_size"].as<std::size_t>();
+    std::size_t break_pos = vm["break_size"].as<std::size_t>();
     //bool csvoutput = vm.count("csv_output") != 0;
     int test_count = vm["test_count"].as<int>();
+
+    if (break_pos > size)
+    {
+        std::cout << "error" << std::endl;
+        return -1;
+    }
 
     std::vector<int> v(size);
 
     // initialize data
     using namespace hpx::parallel;
     generate(execution::par, std::begin(v), std::end(v), random_fill());
-    std::make_heap(std::begin(v), std::end(v));
+    std::make_heap(std::begin(v), std::next(std::begin(v), break_pos));
+    if (break_pos < size)
+        v[break_pos] = RAND_MAX + 1;
 
+    double time_std = run_is_heap_until_element_benchmark_std(test_count, v);
     double time_seq = run_is_heap_until_element_benchmark_seq(test_count, v);
     double time_par = run_is_heap_until_element_benchmark_par(test_count, v);
+    double time_par_unseq = run_is_heap_until_element_benchmark_par_unseq(test_count, v);
 
-    std::cout << "is_heap_until (seq) " << test_count << ", " << time_seq << std::endl;
-    std::cout << "is_heap_until (par) " << test_count << ", " << time_par << std::endl;
+    std::cout << "is_heap_until (std) " << test_count << ", " << time_std << "(sec)" << std::endl;
+    std::cout << "is_heap_until (seq) " << test_count << ", " << time_seq << "(sec)" << std::endl;
+    std::cout << "is_heap_until (par) " << test_count << ", " << time_par << "(sec)" << std::endl; 
+    std::cout << "is_heap_until (par_unseq) " << test_count << ", " << time_par_unseq << "(sec)" << std::endl;
 
     return hpx::finalize();
 }
@@ -121,11 +173,12 @@ int main(int argc, char* argv[])
         ("vector_size",
             boost::program_options::value<std::size_t>()->default_value(10000),
             "size of vector (default: 10000)")
+        ("break_pos",
+        boost::program_options::value<std::size_t>()->default_value(10000),
+        "a position which breaks max heap (default: 10000)")
         ("test_count",
-            boost::program_options::value<int>()->default_value(1),
-            "number of tests to be averaged (default: 1)")
-        ("csv_output",
-            "print results in csv format")
+            boost::program_options::value<int>()->default_value(10),
+            "number of tests to be averaged (default: 10)")
         ("seed,s", boost::program_options::value<unsigned int>(),
             "the random number generator seed to use for this run")
         ;
