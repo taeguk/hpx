@@ -47,14 +47,16 @@ struct random_fill
 double run_is_heap_until_element_benchmark_seq(int test_count, std::vector<int> const& v)
 {
     std::cout << "--- run_is_heap_until_element_benchmark_seq ---" << std::endl;
+    decltype(std::begin(v)) result;
     std::uint64_t time = hpx::util::high_resolution_clock::now();
 
     for (int i = 0; i != test_count; ++i)
     {
-        /* auto result = */std::is_heap_until(std::begin(v), std::end(v));
+        result = std::is_heap_until(std::begin(v), std::end(v));
     }
 
     time = hpx::util::high_resolution_clock::now() - time;
+    std::cout << std::distance(std::begin(v), result) << std::endl;
 
     return (time * 1e-9) / test_count;
 }
@@ -63,15 +65,17 @@ double run_is_heap_until_element_benchmark_seq(int test_count, std::vector<int> 
 double run_is_heap_until_element_benchmark_par(int test_count, std::vector<int> const& v)
 {
     std::cout << "--- run_is_heap_until_element_benchmark_par ---" << std::endl;
+    decltype(std::begin(v)) result;
     std::uint64_t time = hpx::util::high_resolution_clock::now();
 
     for (int i = 0; i != test_count; ++i)
     {
         using namespace hpx::parallel;
-        /* auto result = */is_heap_until(execution::par, std::begin(v), std::end(v));
+        result = is_heap_until(execution::par, std::begin(v), std::end(v));
     }
 
     time = hpx::util::high_resolution_clock::now() - time;
+    std::cout << std::distance(std::begin(v), result) << std::endl;
 
     return (time * 1e-9) / test_count;
 }
@@ -102,7 +106,7 @@ int hpx_main(boost::program_options::variables_map& vm)
     double time_par = run_is_heap_until_element_benchmark_par(test_count, v);
 
     std::cout << "is_heap_until (seq) " << test_count << ", " << time_seq << std::endl;
-    std::cout << "is_heap_until (par)" << test_count << ", " << time_par << std::endl;
+    std::cout << "is_heap_until (par) " << test_count << ", " << time_par << std::endl;
 
     return hpx::finalize();
 }
