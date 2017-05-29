@@ -131,7 +131,7 @@ int hpx_main(boost::program_options::variables_map& vm)
 
     // pull values from cmd
     std::size_t size = vm["vector_size"].as<std::size_t>();
-    std::size_t break_pos = vm["break_size"].as<std::size_t>();
+    std::size_t break_pos = vm["break_pos"].as<std::size_t>();
     //bool csvoutput = vm.count("csv_output") != 0;
     int test_count = vm["test_count"].as<int>();
 
