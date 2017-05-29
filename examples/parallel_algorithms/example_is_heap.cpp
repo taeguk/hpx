@@ -96,6 +96,7 @@ int hpx_main(boost::program_options::variables_map& vm)
     // initialize data
     using namespace hpx::parallel;
     generate(execution::par, std::begin(v), std::end(v), random_fill());
+    std::make_heap(std::begin(v), std::end(v));
 
     double time_seq = run_is_heap_until_element_benchmark_seq(test_count, v);
     double time_par = run_is_heap_until_element_benchmark_par(test_count, v);
