@@ -60,7 +60,7 @@ namespace hpx { namespace parallel { inline namespace v1
 
                 RandIter second = first + 1;
                 --count;
-                util::cancellation_token<std::size_t> tok(count);
+                util::cancellation_token<util::detail::no_data> tok;
 
                 return util::partitioner<ExPolicy, bool, void>::
                     call_with_index(
@@ -68,21 +68,19 @@ namespace hpx { namespace parallel { inline namespace v1
                         [tok, first, comp](RandIter it,
                             std::size_t part_size, std::size_t base_idx) mutable
                         {
-                            util::loop_idx_n(
-                                base_idx, it, part_size, tok,
-                                [&tok, first, &comp](type const& v, std::size_t i)
+                            util::loop_n<ExPolicy>(
+                                it, part_size, tok,
+                                [&tok, first, &comp](RandIter it)
                                 {
-                                    if (comp(*(first + i / 2), v))
-                                        tok.cancel(0);
+                                    difference_type idx = std::distance(first, it) - 1;
+                                    if (comp(*(first + idx / 2), *it))
+                                        tok.cancel();
                                 });
                         },
-                        [tok, second](std::vector<hpx::future<void> > &&) mutable
+                        [tok, second](std::vector<hpx::future<void> > &&)
                             -> bool
                         {
-                            difference_type find_res =
-                                static_cast<difference_type>(tok.get_data());
-
-                            return find_res != 0;
+                            return !tok.was_cancelled();
                         });
             }
         };
