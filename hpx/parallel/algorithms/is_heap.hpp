@@ -68,6 +68,14 @@ namespace hpx { namespace parallel { inline namespace v1
                         [tok, first, comp](RandIter it,
                             std::size_t part_size, std::size_t base_idx) mutable
                         {
+                            for (/**/; part_size != 0; (void) --part_size, ++it, ++base_idx)
+                            {
+                                if (tok.was_cancelled())
+                                    break;
+                                if (comp(*(first + base_idx / 2), *it))
+                                    tok.cancel();
+                            }
+                            /*
                             util::loop_n<ExPolicy>(
                                 it, part_size, tok,
                                 [&tok, first, &comp](RandIter it)
@@ -75,7 +83,7 @@ namespace hpx { namespace parallel { inline namespace v1
                                     difference_type idx = std::distance(first, it) - 1;
                                     if (comp(*(first + idx / 2), *it))
                                         tok.cancel();
-                                });
+                                });*/
                         },
                         [tok, second](std::vector<hpx::future<void> > &&)
                             -> bool
