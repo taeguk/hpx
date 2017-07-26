@@ -46,7 +46,7 @@ struct random_fill
     void serialize(Archive& ar, unsigned)
     {}
 };
-
+/*
 ///////////////////////////////////////////////////////////////////////////////
 template <typename InIter, typename Pred>
 double run_partition_benchmark_std(int test_count,
@@ -63,7 +63,7 @@ double run_partition_benchmark_std(int test_count,
 
     return (time * 1e-9) / test_count;
 }
-
+*/
 ///////////////////////////////////////////////////////////////////////////////
 template <typename ExPolicy, typename FwdIter, typename Pred>
 double run_partition_benchmark_hpx(int test_count, ExPolicy policy,
@@ -107,7 +107,7 @@ void run_benchmark(std::size_t vector_size, int test_count, int base_num,
     auto pred = [base_num](auto const& t) {
         return t < base_num;
     };
-
+    /*
     std::cout << "--- run_partition_benchmark_std ---" << std::endl;
     double time_std =
         run_partition_benchmark_std(test_count, first, last, pred);
@@ -116,23 +116,23 @@ void run_benchmark(std::size_t vector_size, int test_count, int base_num,
     double time_seq =
         run_partition_benchmark_hpx(test_count, execution::seq,
             first, last, pred);
-
+            */
     std::cout << "--- run_partition_benchmark_par ---" << std::endl;
     double time_par =
         run_partition_benchmark_hpx(test_count, execution::par,
             first, last, pred);
-
+    /*
     std::cout << "--- run_partition_benchmark_par_unseq ---" << std::endl;
     double time_par_unseq =
         run_partition_benchmark_hpx(test_count, execution::par_unseq,
             first, last, pred);
-
+            */
     std::cout << "\n-------------- Benchmark Result --------------" << std::endl;
     auto fmt = "partition (%1%) : %2%(sec)";
-    std::cout << (boost::format(fmt) % "std" % time_std) << std::endl;
-    std::cout << (boost::format(fmt) % "seq" % time_seq) << std::endl;
+    //std::cout << (boost::format(fmt) % "std" % time_std) << std::endl;
+    //std::cout << (boost::format(fmt) % "seq" % time_seq) << std::endl;
     std::cout << (boost::format(fmt) % "par" % time_par) << std::endl;
-    std::cout << (boost::format(fmt) % "par_unseq" % time_par_unseq) << std::endl;
+    //std::cout << (boost::format(fmt) % "par_unseq" % time_par_unseq) << std::endl;
     std::cout << "----------------------------------------------" << std::endl;
 }
 
@@ -194,12 +194,12 @@ int hpx_main(boost::program_options::variables_map& vm)
     if (iterator_tag_str == "random")
         run_benchmark(vector_size, test_count, base_num,
             std::random_access_iterator_tag());
-    else if (iterator_tag_str == "bidirectional")
-        run_benchmark(vector_size, test_count, base_num,
-            std::bidirectional_iterator_tag());
-    else // forward
-        run_benchmark(vector_size, test_count, base_num,
-            std::forward_iterator_tag());
+    //else if (iterator_tag_str == "bidirectional")
+    //    run_benchmark(vector_size, test_count, base_num,
+    //        std::bidirectional_iterator_tag());
+    //else // forward
+    //    run_benchmark(vector_size, test_count, base_num,
+    //        std::forward_iterator_tag());
 
     return hpx::finalize();
 }
