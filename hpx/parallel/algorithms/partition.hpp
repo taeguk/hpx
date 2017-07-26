@@ -860,7 +860,7 @@ namespace hpx { namespace parallel { inline namespace v1
                         */
                         remaining_block_futures[i] = execution::async_execute(
                             policy.executor(), &partition_helper::partition_thread<FwdIter, Pred, Proj>,
-                            std::ref(block_manager), pred, proj);
+                            block_manager, pred, proj);
                     }
                     
                     // Wait sub-partitioning to be all finished.
