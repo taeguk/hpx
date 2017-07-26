@@ -487,8 +487,8 @@ namespace hpx { namespace parallel { inline namespace v1
                     blocks_.back() = { next, last };
                 }
 
-                block_manager(const block_manager&) = delete;
-                block_manager& operator=(const block_manager&) = delete;
+                block_manager(const block_manager&) = default;
+                block_manager& operator=(const block_manager&) = default;
 
                 block<FwdIter> get_left_block()
                 {
@@ -849,7 +849,7 @@ namespace hpx { namespace parallel { inline namespace v1
                     // Main parallel phrase: perform sub-partitioning in each thread.
                     for (std::size_t i = 0; i < remaining_block_futures.size(); ++i)
                     {
-                        
+                        /*
                         remaining_block_futures[i] = execution::async_execute(
                             policy.executor(),
                             [&block_manager, pred, proj]()
@@ -857,12 +857,11 @@ namespace hpx { namespace parallel { inline namespace v1
                                 return partition_thread(
                                     block_manager, pred, proj);
                             });
-                        
-                        /*
+                         */
                         remaining_block_futures[i] = execution::async_execute(
                             policy.executor(), &partition_helper::partition_thread<FwdIter, Pred, Proj>,
                             block_manager, pred, proj);
-                        */
+                       
                     }
                     
                     // Wait sub-partitioning to be all finished.
