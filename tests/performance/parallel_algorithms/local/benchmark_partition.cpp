@@ -93,8 +93,10 @@ void run_benchmark(std::size_t vector_size, int test_count, int base_num,
     typedef test::test_iterator<base_iterator, IteratorTag> iterator;
 
     std::vector<int> v(vector_size);
-    iterator first = iterator(std::begin(v));
-    iterator last = iterator(std::end(v));
+    //iterator first = iterator(std::begin(v));
+    //iterator last = iterator(std::end(v));
+    auto first = std::begin(v);
+    auto last = std::end(v);
 
     // initialize data
     using namespace hpx::parallel;
