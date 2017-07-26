@@ -543,7 +543,7 @@ namespace hpx { namespace parallel { inline namespace v1
 
             // The function which performs sub-partitioning.
             template <typename FwdIter, typename Pred, typename Proj>
-            static block<FwdIter>
+            static hpx::future<block<FwdIter>>
             partition_thread(block_manager<FwdIter>& block_manager,
                 Pred pred, Proj proj)
             {
@@ -571,9 +571,9 @@ namespace hpx { namespace parallel { inline namespace v1
                     }
 
                     if (left_block.empty())
-                        return right_block;
+                        return hpx::make_ready_future(right_block);
                     if (right_block.empty())
-                        return left_block;
+                        return hpx::make_ready_future(left_block);
 
                     std::iter_swap(left_block.first++, right_block.first++);
                 }
