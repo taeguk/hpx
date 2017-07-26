@@ -524,7 +524,7 @@ namespace hpx { namespace parallel { inline namespace v1
                 std::int64_t left_block_no_{ -1 }, right_block_no_{ 1 };
                 hpx::lcos::local::spinlock mutex_;
             };
-
+            /*
             // std::swap_ranges doens't support overlapped ranges in standard.
             // But, actually general implementations of std::swap_ranges are useful
             //     in specific cases.
@@ -539,14 +539,14 @@ namespace hpx { namespace parallel { inline namespace v1
                     std::iter_swap(first++, dest++);
 
                 return dest;
-            }
+            }*/
 
             // The function which performs sub-partitioning.
             template <typename FwdIter, typename Pred, typename Proj>
-            static hpx::future<block<FwdIter>>
+            static block<FwdIter>
             partition_thread(block_manager<FwdIter>& block_manager,
                 Pred pred, Proj proj)
-            {
+            {/*
                 using hpx::util::invoke;
 
                 block<FwdIter> left_block, right_block;
@@ -576,9 +576,10 @@ namespace hpx { namespace parallel { inline namespace v1
                         return hpx::make_ready_future(left_block);
 
                     std::iter_swap(left_block.first++, right_block.first++);
-                }
+                }*/
+                return block<FwdIter>();
             }
-
+            /*
             // Collapse remaining blocks.
             template <typename FwdIter, typename Pred, typename Proj>
             static void
@@ -805,7 +806,7 @@ namespace hpx { namespace parallel { inline namespace v1
 
                     return { boundary, boundary_end };
                 }
-            }
+            }*/
             
             template <typename ExPolicy, typename FwdIter,
                 typename Pred, typename Proj>
@@ -851,10 +852,13 @@ namespace hpx { namespace parallel { inline namespace v1
                             policy.executor(), &partition_thread<FwdIter, Pred, Proj>,
                             std::ref(block_manager), pred, proj);
                     }
-
+                    
                     // Wait sub-partitioning to be all finished.
                     hpx::wait_all(remaining_block_futures);
 
+                    return algorithm_result::get(std::move(first));
+
+                    /*
                     // Handle exceptions in parallel phrase.
                     std::list<std::exception_ptr> errors;
                     // TODO: Is it okay to use thing in util::detail:: ?
@@ -895,7 +899,7 @@ namespace hpx { namespace parallel { inline namespace v1
                         unpartitioned_block.first, unpartitioned_block.last,
                         pred, proj);
 
-                    return algorithm_result::get(std::move(real_boundary));
+                    return algorithm_result::get(std::move(real_boundary));*/
                 }
                 catch (...) {
                     return algorithm_result::get(
