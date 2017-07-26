@@ -398,8 +398,8 @@ namespace hpx { namespace parallel { inline namespace v1
                     : first_(first), left_(0), right_(std::distance(first, last)),
                         block_size_(block_size)
                 {}
-                block_manager(const block_manager&) = delete;
-                block_manager& operator=(const block_manager&) = delete;
+                block_manager(const block_manager&) = default;
+                block_manager& operator=(const block_manager&) = default;
 
                 block<RandIter> get_left_block()
                 {
