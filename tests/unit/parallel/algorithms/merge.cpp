@@ -40,6 +40,45 @@ void merge_bad_alloc_test()
     //test_merge_bad_alloc<std::forward_iterator_tag>();
 }
 
+// This is not related to parallel::merge!!!
+#include <hpx/exception_list.hpp>
+#include <hpx/dataflow.hpp>
+#include <hpx/lcos/future.hpp>
+void test_for_issue_2816()
+{
+    try {
+        hpx::future<void> left = hpx::lcos::make_ready_future();
+        hpx::future<void> right = hpx::lcos::make_exceptional_future<void>(std::bad_alloc());
+        hpx::future<void> f = hpx::dataflow(
+            [](hpx::future<void> && left,
+                hpx::future<void> && right) -> void
+        {
+            if (left.has_exception() || right.has_exception())
+            {
+                std::list<std::exception_ptr> errors;
+                if (left.has_exception())
+                    errors.push_back(left.get_exception_ptr());
+                if (right.has_exception())
+                    errors.push_back(right.get_exception_ptr());
+
+                throw hpx::exception_list(std::move(errors));
+            }
+        }, std::move(left), std::move(right));
+        f.get();
+    }
+    catch (std::bad_alloc const &) {
+        std::cout << "std::bad_alloc !!" << std::endl;
+        HPX_TEST(true);
+    }
+    catch (hpx::exception_list const& el) {
+        std::cout << "hpx::exception_list !!" << std::endl;
+        HPX_TEST(false);
+    }
+    catch (...) {
+        HPX_TEST(false);
+    }
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 int hpx_main(boost::program_options::variables_map& vm)
 {
@@ -53,6 +92,7 @@ int hpx_main(boost::program_options::variables_map& vm)
     merge_test();
     merge_exception_test();
     merge_bad_alloc_test();
+    test_for_issue_2816();
 
     std::cout << "Test Finish!" << std::endl;
 
