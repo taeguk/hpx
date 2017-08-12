@@ -48,38 +48,82 @@ namespace hpx { namespace parallel { inline namespace v1
     {
         /// \cond NOINTERNAL
 
+        struct dereferencing_normal
+        {
+            template <typename Iter>
+            HPX_HOST_DEVICE HPX_FORCEINLINE
+            auto operator()(Iter it) const
+                -> decltype(*it)
+            {
+                return *it;
+            }
+        };
+
+        struct dereferencing_double
+        {
+            template <typename Iter>
+            HPX_HOST_DEVICE HPX_FORCEINLINE
+            auto operator()(Iter it) const
+                -> decltype(**it)
+            {
+                return **it;
+            }
+        };
+
         // sequential merge with projection function.
         template <typename InIter1, typename InIter2, typename OutIter,
-            typename Comp, typename Proj1, typename Proj2>
+            typename Comp, typename Proj1, typename Proj2,
+            typename Deref1 = dereferencing_normal,
+            typename Deref2 = dereferencing_normal,
+            typename Deref3 = dereferencing_normal>
         hpx::util::tuple<InIter1, InIter2, OutIter>
         sequential_merge(InIter1 first1, InIter1 last1,
             InIter2 first2, InIter2 last2,
-            OutIter dest, Comp && comp, Proj1 && proj1, Proj2 && proj2)
+            OutIter dest, Comp && comp, Proj1 && proj1, Proj2 && proj2,
+            Deref1 && deref1 = Deref1(), Deref2 && deref2 = Deref2(),
+            Deref3 && deref3 = Deref3())
         {
-            using hpx::util::invoke;
+            // In some cases, MSVC complains ambiguity for overloaded functions,
+            //   std::invoke and hpx::util::invoke.
+            //
+            // using hpx::util::invoke;
+            // invoke(...)
 
             if (first1 != last1 && first2 != last2)
             {
                 while (true)
                 {
-                    if (invoke(comp,
-                        invoke(proj2, *first2),
-                        invoke(proj1, *first1)))
+                    if (hpx::util::invoke(comp,
+                        hpx::util::invoke(proj2, hpx::util::invoke(deref2, first2)),
+                        hpx::util::invoke(proj1, hpx::util::invoke(deref1, first1))))
                     {
-                        *dest++ = *first2++;
-                        if (first2 == last2)
+                        hpx::util::invoke(deref3, dest++) =
+                            hpx::util::invoke(deref2, first2);
+                        if (++first2 == last2)
                             break;
                     }
                     else
                     {
-                        *dest++ = *first1++;
-                        if (first1 == last1)
+                        hpx::util::invoke(deref3, dest++) =
+                            hpx::util::invoke(deref1, first1);
+                        if (++first1 == last1)
                             break;
                     }
                 }
             }
-            dest = std::copy(first1, last1, dest);
-            dest = std::copy(first2, last2, dest);
+
+            while (first1 != last1)
+            {
+                hpx::util::invoke(deref3, dest++) =
+                    hpx::util::invoke(deref1, first1);
+                ++first1;
+            }
+            while (first2 != last2)
+            {
+                hpx::util::invoke(deref3, dest++) =
+                    hpx::util::invoke(deref2, first2);
+                ++first2;
+            }
 
             return hpx::util::make_tuple(last1, last2, dest);
         }
@@ -87,15 +131,14 @@ namespace hpx { namespace parallel { inline namespace v1
         struct UpperBoundHelper
         {
             // upper_bound with projection function.
-            template<typename FwdIter, typename Type, typename Comp, typename Proj>
+            template<typename FwdIter, typename Type, typename Comp, typename Proj,
+                typename Deref>
             static FwdIter
             call(FwdIter first, FwdIter last, const Type& value,
-                Comp comp, Proj proj)
+                Comp comp, Proj proj, Deref deref)
             {
                 typedef typename std::iterator_traits<FwdIter>::difference_type
                     difference_type;
-
-                using hpx::util::invoke;
 
                 difference_type count = std::distance(first, last);
 
@@ -104,7 +147,9 @@ namespace hpx { namespace parallel { inline namespace v1
                     difference_type step = count / 2;
                     FwdIter mid = std::next(first, step);
 
-                    if (!invoke(comp, value, invoke(proj, *mid)))
+                    if (!hpx::util::invoke(comp,
+                        value,
+                        hpx::util::invoke(proj, hpx::util::invoke(deref, mid))))
                     {
                         first = ++mid;
                         count -= step + 1;
@@ -124,15 +169,14 @@ namespace hpx { namespace parallel { inline namespace v1
         struct LowerBoundHelper
         {
             // lower_bound with projection function.
-            template<typename FwdIter, typename Type, typename Comp, typename Proj>
+            template<typename FwdIter, typename Type, typename Comp, typename Proj,
+                typename Deref>
             static FwdIter
             call(FwdIter first, FwdIter last, const Type& value,
-                Comp comp, Proj proj)
+                Comp comp, Proj proj, Deref deref)
             {
                 typedef typename std::iterator_traits<FwdIter>::difference_type
                     difference_type;
-
-                using hpx::util::invoke;
 
                 difference_type count = std::distance(first, last);
 
@@ -141,7 +185,9 @@ namespace hpx { namespace parallel { inline namespace v1
                     difference_type step = count / 2;
                     FwdIter mid = std::next(first, step);
 
-                    if (invoke(comp, invoke(proj, *mid), value))
+                    if (hpx::util::invoke(comp,
+                        hpx::util::invoke(proj, hpx::util::invoke(deref, mid)),
+                        value))
                     {
                         first = ++mid;
                         count -= step + 1;
@@ -158,9 +204,13 @@ namespace hpx { namespace parallel { inline namespace v1
             typedef struct UpperBoundHelper another_type;
         };
 
-        template <typename ExPolicy, 
+        template <typename ExPolicy,
             typename RandIter1, typename RandIter2, typename RandIter3,
-            typename Comp, typename Proj1, typename Proj2, typename BinarySearchHelper,
+            typename Comp, typename Proj1, typename Proj2,
+            typename Deref1 = dereferencing_normal,
+            typename Deref2 = dereferencing_normal,
+            typename Deref3 = dereferencing_normal,
+            typename BinarySearchHelper = UpperBoundHelper,
         HPX_CONCEPT_REQUIRES_(
             hpx::traits::is_random_access_iterator<RandIter1>::value &&
             hpx::traits::is_random_access_iterator<RandIter2>::value &&
@@ -170,10 +220,12 @@ namespace hpx { namespace parallel { inline namespace v1
             RandIter1 first1, RandIter1 last1,
             RandIter2 first2, RandIter2 last2,
             RandIter3 dest, Comp comp,
-            Proj1 proj1, Proj2 proj2, BinarySearchHelper)
+            Proj1 proj1, Proj2 proj2,
+            Deref1 deref1 = Deref1(),
+            Deref2 deref2 = Deref2(),
+            Deref3 deref3 = Deref3(),
+            BinarySearchHelper = BinarySearchHelper())
         {
-            using hpx::util::invoke;
-
             const std::size_t threshold = 65536ul;
 
             HPX_ASSERT(threshold >= 1u);
@@ -184,7 +236,8 @@ namespace hpx { namespace parallel { inline namespace v1
             if (size1 + size2 <= threshold)
             {
                 sequential_merge(first1, first1 + size1,
-                    first2, first2 + size2, dest, comp, proj1, proj2);
+                    first2, first2 + size2, dest, comp, proj1, proj2,
+                    deref1, deref2, deref3);
                 return;
             }
 
@@ -192,6 +245,7 @@ namespace hpx { namespace parallel { inline namespace v1
             {
                 parallel_merge_helper(policy,
                     first2, last2, first1, last1, dest, comp, proj2, proj1,
+                    deref2, deref1, deref3,
                     typename BinarySearchHelper::another_type());
                 return;
             }
@@ -200,23 +254,27 @@ namespace hpx { namespace parallel { inline namespace v1
 
             RandIter1 mid1 = first1 + size1 / 2;
             RandIter2 boundary2 = BinarySearchHelper::call(
-                first2, last2, invoke(proj1, *mid1), comp, proj2);
+                first2, last2,
+                hpx::util::invoke(proj1, hpx::util::invoke(deref1, mid1)),
+                comp, proj2, deref2);
             RandIter3 target = dest + (mid1 - first1) + (boundary2 - first2);
 
-            *target = *mid1;
+            hpx::util::invoke(deref3, target) = hpx::util::invoke(deref1, mid1);
 
             hpx::future<void> fut = execution::async_execute(policy.executor(),
                 [&]() -> void
                 {
                     parallel_merge_helper(policy,
                         first1, mid1, first2, boundary2,
-                        dest, comp, proj1, proj2, BinarySearchHelper());
+                        dest, comp, proj1, proj2,
+                        deref1, deref2, deref3, BinarySearchHelper());
                 });
 
             try {
                 parallel_merge_helper(policy,
                     mid1 + 1, last1, boundary2, last2,
-                    target + 1, comp, proj1, proj2, BinarySearchHelper());
+                    target + 1, comp, proj1, proj2,
+                    deref1, deref2, deref3, BinarySearchHelper());
             }
             catch (...) {
                 fut.wait();
@@ -263,11 +321,55 @@ namespace hpx { namespace parallel { inline namespace v1
                 first1, last1, first2, last2, dest,
                 std::forward<Comp>(comp),
                 std::forward<Proj1>(proj1),
-                std::forward<Proj2>(proj2),
-                UpperBoundHelper());
+                std::forward<Proj2>(proj2));
 
             return hpx::util::make_tuple(last1, last2,
                 dest + (last1 - first1) + (last2 - first2));
+        }
+
+        template <typename ExPolicy, 
+            typename FwdIter1, typename FwdIter2, typename FwdIter3,
+            typename Comp, typename Proj1, typename Proj2,
+        HPX_CONCEPT_REQUIRES_(
+            !hpx::traits::is_random_access_iterator<FwdIter1>::value &&
+            !hpx::traits::is_random_access_iterator<FwdIter2>::value &&
+            !hpx::traits::is_random_access_iterator<FwdIter3>::value &&
+            hpx::traits::is_forward_iterator<FwdIter1>::value &&
+            hpx::traits::is_forward_iterator<FwdIter2>::value &&
+            hpx::traits::is_forward_iterator<FwdIter3>::value)>
+        hpx::util::tuple<FwdIter1, FwdIter2, FwdIter3>
+        parallel_merge(ExPolicy && policy,
+            FwdIter1 first1, FwdIter1 last1,
+            FwdIter2 first2, FwdIter2 last2,
+            FwdIter3 dest, Comp && comp,
+            Proj1 && proj1, Proj2 && proj2)
+        {
+            std::size_t size1 = std::distance(first1, last1);
+            std::size_t size2 = std::distance(first2, last2);
+            std::vector<FwdIter1> temp1(size1);
+            std::vector<FwdIter2> temp2(size2);
+            std::vector<FwdIter3> temp3(size1 + size2);
+
+            for (FwdIter1& it : temp1)
+                it = first1++;
+            for (FwdIter2& it : temp2)
+                it = first2++;
+            for (FwdIter3& it : temp3)
+                it = dest++;
+
+            parallel_merge_helper(std::forward<ExPolicy>(policy),
+                std::begin(temp1), std::end(temp1),
+                std::begin(temp2), std::end(temp2),
+                std::begin(temp3),
+                std::forward<Comp>(comp),
+                std::forward<Proj1>(proj1),
+                std::forward<Proj2>(proj2),
+                dereferencing_double(),
+                dereferencing_double(),
+                dereferencing_double(),
+                UpperBoundHelper());
+
+            return hpx::util::make_tuple(last1, last2, dest);
         }
 
         template <typename IterTuple>

@@ -20,24 +20,24 @@ void merge_test()
 {
     std::cout << "--- merge_test ---" << std::endl;
     test_merge<std::random_access_iterator_tag>();
-    //test_merge<std::bidirectional_iterator_tag>();
-    //test_merge<std::forward_iterator_tag>();
+    test_merge<std::bidirectional_iterator_tag>();
+    test_merge<std::forward_iterator_tag>();
 }
 
 void merge_exception_test()
 {
     std::cout << "--- merge_exception_test ---" << std::endl;
     test_merge_exception<std::random_access_iterator_tag>();
-    //test_merge_exception<std::bidirectional_iterator_tag>();
-    //test_merge_exception<std::forward_iterator_tag>();
+    test_merge_exception<std::bidirectional_iterator_tag>();
+    test_merge_exception<std::forward_iterator_tag>();
 }
 
 void merge_bad_alloc_test()
 {
     std::cout << "--- merge_bad_alloc_test ---" << std::endl;
     test_merge_bad_alloc<std::random_access_iterator_tag>();
-    //test_merge_bad_alloc<std::bidirectional_iterator_tag>();
-    //test_merge_bad_alloc<std::forward_iterator_tag>();
+    test_merge_bad_alloc<std::bidirectional_iterator_tag>();
+    test_merge_bad_alloc<std::forward_iterator_tag>();
 }
 
 ///////////////////////////////////////////////////////////////////////////////
