@@ -135,9 +135,9 @@ void run_benchmark(std::size_t vector_size1, std::size_t vector_size2,
 ///////////////////////////////////////////////////////////////////////////////
 std::string correct_iterator_tag_str(std::string iterator_tag)
 {
-    if (iterator_tag != "random"/* &&
+    if (iterator_tag != "random" &&
         iterator_tag != "bidirectional" &&
-        iterator_tag != "forward"*/)
+        iterator_tag != "forward")
         return "random";
     else
         return iterator_tag;
@@ -181,12 +181,12 @@ int hpx_main(boost::program_options::variables_map& vm)
     if (iterator_tag_str == "random")
         run_benchmark(vector_size1, vector_size2, test_count, random_range,
             std::random_access_iterator_tag());
-    //else if (iterator_tag_str == "bidirectional")
-    //    run_benchmark(vector_size1, vector_size2, test_count, random_range,
-    //        std::bidirectional_iterator_tag());
-    //else // forward
-    //    run_benchmark(vector_size1, vector_size2, test_count, random_range,
-    //        std::forward_iterator_tag());
+    else if (iterator_tag_str == "bidirectional")
+        run_benchmark(vector_size1, vector_size2, test_count, random_range,
+            std::bidirectional_iterator_tag());
+    else // forward
+        run_benchmark(vector_size1, vector_size2, test_count, random_range,
+            std::forward_iterator_tag());
 
     return hpx::finalize();
 }
