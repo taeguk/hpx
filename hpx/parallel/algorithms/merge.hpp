@@ -7,6 +7,7 @@
 #define HPX_PARALLEL_ALGORITHM_MERGE_AUG_08_2017_0819AM
 
 #include <hpx/config.hpp>
+#include <hpx/dataflow.hpp>
 #include <hpx/traits/concepts.hpp>
 #include <hpx/traits/is_iterator.hpp>
 #include <hpx/util/invoke.hpp>
@@ -344,18 +345,54 @@ namespace hpx { namespace parallel { inline namespace v1
             FwdIter3 dest, Comp && comp,
             Proj1 && proj1, Proj2 && proj2)
         {
-            std::size_t size1 = std::distance(first1, last1);
-            std::size_t size2 = std::distance(first2, last2);
-            std::vector<FwdIter1> temp1(size1);
-            std::vector<FwdIter2> temp2(size2);
-            std::vector<FwdIter3> temp3(size1 + size2);
+            std::vector<FwdIter1> temp1;
+            std::vector<FwdIter2> temp2;
+            std::vector<FwdIter3> temp3;
 
-            for (FwdIter1& it : temp1)
-                it = first1++;
-            for (FwdIter2& it : temp2)
-                it = first2++;
-            for (FwdIter3& it : temp3)
-                it = dest++;
+            hpx::shared_future<std::size_t> size1_fut =
+                execution::async_execute(policy.executor(),
+                    [&temp1, first1, last1]() -> std::size_t
+                    {
+                        return std::distance(first1, last1);
+                    });
+            hpx::shared_future<std::size_t> size2_fut =
+                execution::async_execute(policy.executor(),
+                    [&temp2, first2, last2]() -> std::size_t
+                    {
+                        return std::distance(first2, last2);
+                    });
+
+            hpx::future<void> work1 = size1_fut.then(policy.executor(),
+                [&temp1, first1](hpx::shared_future<std::size_t> size1_fut) mutable
+                    -> void
+                {
+                    std::size_t size1 = size1_fut.get();
+                    temp1.reserve(size1);
+                    for (std::size_t i = 0; i < size1; ++i)
+                        temp1.push_back(first1++);
+                });
+            hpx::future<void> work2 = size2_fut.then(policy.executor(),
+                [&temp2, first2](hpx::shared_future<std::size_t> size2_fut) mutable
+                    -> void
+                {
+                    std::size_t size2 = size2_fut.get();
+                    temp2.reserve(size2);
+                    for (std::size_t i = 0; i < size2; ++i)
+                        temp2.push_back(first2++);
+                });
+
+            hpx::future<void> work3 = hpx::dataflow(
+                [&temp3, dest](hpx::shared_future<std::size_t> size1_fut,
+                    hpx::shared_future<std::size_t> size2_fut) mutable
+                    -> void
+                {
+                    std::size_t size3 = size1_fut.get() + size2_fut.get();
+                    temp3.reserve(size3);
+                    for (std::size_t i = 0; i < size3; ++i)
+                        temp3.push_back(dest++);
+                }, size1_fut, size2_fut);
+
+            hpx::wait_all(work1, work2, work3);
 
             parallel_merge_helper(std::forward<ExPolicy>(policy),
                 std::begin(temp1), std::end(temp1),
@@ -369,7 +406,7 @@ namespace hpx { namespace parallel { inline namespace v1
                 dereferencing_double(),
                 UpperBoundHelper());
 
-            return hpx::util::make_tuple(last1, last2, dest);
+            return hpx::util::make_tuple(last1, last2, std::next(temp3.back()));
         }
 
         template <typename IterTuple>
