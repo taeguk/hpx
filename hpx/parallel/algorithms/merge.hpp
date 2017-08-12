@@ -210,11 +210,7 @@ namespace hpx { namespace parallel { inline namespace v1
             typename Deref1 = dereferencing_normal,
             typename Deref2 = dereferencing_normal,
             typename Deref3 = dereferencing_normal,
-            typename BinarySearchHelper = UpperBoundHelper,
-        HPX_CONCEPT_REQUIRES_(
-            hpx::traits::is_random_access_iterator<RandIter1>::value &&
-            hpx::traits::is_random_access_iterator<RandIter2>::value &&
-            hpx::traits::is_random_access_iterator<RandIter3>::value)>
+            typename BinarySearchHelper = UpperBoundHelper>
         void
         parallel_merge_helper(ExPolicy policy,
             RandIter1 first1, RandIter1 last1,
@@ -230,13 +226,13 @@ namespace hpx { namespace parallel { inline namespace v1
 
             HPX_ASSERT(threshold >= 1u);
 
-            std::size_t size1 = last1 - first1;
-            std::size_t size2 = last2 - first2;
+            std::size_t size1 = std::distance(first1, last1);//last1 - first1;
+            std::size_t size2 = std::distance(first2, last2);//last2 - first2;
 
             if (size1 + size2 <= threshold)
             {
-                sequential_merge(first1, first1 + size1,
-                    first2, first2 + size2, dest, comp, proj1, proj2,
+                sequential_merge(first1, last1,
+                    first2, last2, dest, comp, proj1, proj2,
                     deref1, deref2, deref3);
                 return;
             }
@@ -252,12 +248,12 @@ namespace hpx { namespace parallel { inline namespace v1
 
             HPX_ASSERT(size1 >= 1u);
 
-            RandIter1 mid1 = first1 + size1 / 2;
+            RandIter1 mid1 = std::next(first1, size1 / 2);
             RandIter2 boundary2 = BinarySearchHelper::call(
                 first2, last2,
                 hpx::util::invoke(proj1, hpx::util::invoke(deref1, mid1)),
                 comp, proj2, deref2);
-            RandIter3 target = dest + (mid1 - first1) + (boundary2 - first2);
+            RandIter3 target = std::next(dest, size1 / 2 + std::distance(first2, boundary2));
 
             hpx::util::invoke(deref3, target) = hpx::util::invoke(deref1, mid1);
 
@@ -272,8 +268,8 @@ namespace hpx { namespace parallel { inline namespace v1
 
             try {
                 parallel_merge_helper(policy,
-                    mid1 + 1, last1, boundary2, last2,
-                    target + 1, comp, proj1, proj2,
+                    std::next(mid1), last1, boundary2, last2,
+                    std::next(target), comp, proj1, proj2,
                     deref1, deref2, deref3, BinarySearchHelper());
             }
             catch (...) {
@@ -307,9 +303,9 @@ namespace hpx { namespace parallel { inline namespace v1
             typename RandIter1, typename RandIter2, typename RandIter3,
             typename Comp, typename Proj1, typename Proj2,
         HPX_CONCEPT_REQUIRES_(
-            hpx::traits::is_random_access_iterator<RandIter1>::value &&
-            hpx::traits::is_random_access_iterator<RandIter2>::value &&
-            hpx::traits::is_random_access_iterator<RandIter3>::value)>
+            hpx::traits::is_forward_iterator<RandIter1>::value &&
+            hpx::traits::is_forward_iterator<RandIter2>::value &&
+            hpx::traits::is_forward_iterator<RandIter3>::value)>
         hpx::util::tuple<RandIter1, RandIter2, RandIter3>
         parallel_merge(ExPolicy && policy,
             RandIter1 first1, RandIter1 last1,
@@ -317,6 +313,7 @@ namespace hpx { namespace parallel { inline namespace v1
             RandIter3 dest, Comp && comp,
             Proj1 && proj1, Proj2 && proj2)
         {
+            std::cout << "start" << std::endl;
             parallel_merge_helper(std::forward<ExPolicy>(policy),
                 first1, last1, first2, last2, dest,
                 std::forward<Comp>(comp),
@@ -324,9 +321,9 @@ namespace hpx { namespace parallel { inline namespace v1
                 std::forward<Proj2>(proj2));
 
             return hpx::util::make_tuple(last1, last2,
-                dest + (last1 - first1) + (last2 - first2));
+                std::next(dest, std::distance(first1, last1) + std::distance(first2, last2)));
         }
-
+/*
         template <typename ExPolicy, 
             typename FwdIter1, typename FwdIter2, typename FwdIter3,
             typename Comp, typename Proj1, typename Proj2,
@@ -344,6 +341,7 @@ namespace hpx { namespace parallel { inline namespace v1
             FwdIter3 dest, Comp && comp,
             Proj1 && proj1, Proj2 && proj2)
         {
+            std::cout << "start" << std::endl;
             std::size_t size1 = std::distance(first1, last1);
             std::size_t size2 = std::distance(first2, last2);
             std::vector<FwdIter1> temp1(size1);
@@ -357,6 +355,7 @@ namespace hpx { namespace parallel { inline namespace v1
             for (FwdIter3& it : temp3)
                 it = dest++;
 
+            std::cout << "real start" << std::endl;
             parallel_merge_helper(std::forward<ExPolicy>(policy),
                 std::begin(temp1), std::end(temp1),
                 std::begin(temp2), std::end(temp2),
@@ -370,7 +369,7 @@ namespace hpx { namespace parallel { inline namespace v1
                 UpperBoundHelper());
 
             return hpx::util::make_tuple(last1, last2, dest);
-        }
+        }*/
 
         template <typename IterTuple>
         struct merge : public detail::algorithm<merge<IterTuple>, IterTuple>
