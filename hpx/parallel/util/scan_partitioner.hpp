@@ -185,7 +185,6 @@ namespace hpx { namespace parallel { namespace util
                         >(policy.parameters()));
 
                 std::vector<hpx::shared_future<Result1> > workitems;
-                std::vector<hpx::future<Result2> > finalitems;
                 std::list<std::exception_ptr> errors;
 
                 try {
@@ -207,7 +206,7 @@ namespace hpx { namespace parallel { namespace util
                     // schedule every chunk on a separate thread
                     std::size_t size = hpx::util::size(shape);
                     workitems.reserve(size + 1);
-                    finalitems.reserve(size);
+                    //finalitems.reserve(size);
 
                     // If the size of count was enough to warrant testing for a
                     // chunk, pre-initialize second intermediate result.
@@ -223,7 +222,7 @@ namespace hpx { namespace parallel { namespace util
                     // Schedule first step of scan algorithm, step 2 is
                     // performed as soon as the current partition and the
                     // partition to the left is ready.
-                    for(auto const& elem: shape)
+                    for (auto const& elem : shape)
                     {
                         FwdIter it = hpx::util::get<0>(elem);
                         std::size_t size = hpx::util::get<1>(elem);
@@ -235,15 +234,16 @@ namespace hpx { namespace parallel { namespace util
                         workitems.push_back(dataflow(hpx::launch::sync,
                             f2, prev, curr));
                     }
-                    
-                    std::size_t idx = 0;
 
+                    std::size_t idx = 0ul;
                     if (tested)
                     {
                         HPX_ASSERT(count_ > count);
 
-                        finalitems.push_back(dataflow(hpx::launch::sync,
-                            f3, first_, count_ - count, workitems[0], workitems[1]));
+                        hpx::wait_all(workitems[0], workitems[1]);
+                        // dataflow.
+                        hpx::util::invoke(f3, first_, count_ - count,
+                            workitems[0], workitems[1]);
                         ++idx;
                     }
 
@@ -253,8 +253,10 @@ namespace hpx { namespace parallel { namespace util
                         FwdIter it = hpx::util::get<0>(elem);
                         std::size_t size = hpx::util::get<1>(elem);
 
-                        finalitems.push_back(dataflow(hpx::launch::sync,
-                            f3, it, size, workitems[idx], workitems[idx + 1]));
+                        hpx::wait_all(workitems[idx], workitems[idx + 1]);
+                        // push ready future to finaliterms?
+                        hpx::util::invoke(f3, it, size,
+                            workitems[idx], workitems[idx + 1]);
                         ++idx;
                     }
                 }
@@ -269,18 +271,16 @@ namespace hpx { namespace parallel { namespace util
                 // wait for all tasks to finish
                 return dataflow(
                     [errors, f4, scoped_param](
-                        std::vector<hpx::shared_future<Result1> >&& witems,
-                        std::vector<hpx::future<Result2> >&& fitems
+                        std::vector<hpx::shared_future<Result1> >&& witems
                     ) mutable -> R
                     {
                         HPX_UNUSED(scoped_param);
 
                         handle_local_exceptions<ExPolicy>::call(witems, errors);
-                        handle_local_exceptions<ExPolicy>::call(fitems, errors);
 
-                        return f4(std::move(witems), std::move(fitems));
+                        return f4(std::move(witems));
                     },
-                    std::move(workitems), std::move(finalitems));
+                    std::move(workitems));
             }
         };
 
