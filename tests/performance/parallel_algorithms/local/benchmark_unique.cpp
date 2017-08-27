@@ -73,13 +73,13 @@ double run_unique_benchmark_std(int test_count,
 
     for (int i = 0; i < test_count; ++i)
     {
-        std::uint64_t elapsed = hpx::util::high_resolution_clock::now();
-        std::unique(first, last);
-        time += hpx::util::high_resolution_clock::now() - elapsed;
 
         // Restore [first, last) with original data.
         hpx::parallel::copy(hpx::parallel::execution::par,
             org_first, org_last, first);
+        std::uint64_t elapsed = hpx::util::high_resolution_clock::now();
+        std::unique(first, last);
+        time += hpx::util::high_resolution_clock::now() - elapsed;
     }
 
     return (time * 1e-9) / test_count;
@@ -94,13 +94,13 @@ double run_unique_benchmark_hpx(int test_count, ExPolicy policy,
 
     for (int i = 0; i < test_count; ++i)
     {
-        std::uint64_t elapsed = hpx::util::high_resolution_clock::now();
-        hpx::parallel::unique(policy, first, last);
-        time += hpx::util::high_resolution_clock::now() - elapsed;
 
         // Restore [first, last) with original data.
         hpx::parallel::copy(hpx::parallel::execution::par,
             org_first, org_last, first);
+        std::uint64_t elapsed = hpx::util::high_resolution_clock::now();
+        hpx::parallel::unique(policy, first, last);
+        time += hpx::util::high_resolution_clock::now() - elapsed;
     }
 
     return (time * 1e-9) / test_count;
@@ -128,7 +128,6 @@ void run_benchmark(std::size_t vector_size, int test_count,
 
     auto dest_dist = std::distance(first.base(),
         std::unique(first, last).base());
-    v = org_v;
 
     auto org_first = std::begin(org_v);
     auto org_last = std::end(org_v);
