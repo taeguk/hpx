@@ -165,7 +165,7 @@ namespace hpx { namespace parallel { inline namespace v1
                             [&dest](zip_iterator it) mutable
                             {
                                 if(!get<1>(*it)) {
-                                    *dest++ = get<0>(*it);
+                                    *dest++ = std::move(get<0>(*it));
                                 }
                             });
                     };
