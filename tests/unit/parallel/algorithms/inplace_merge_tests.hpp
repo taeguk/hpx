@@ -365,6 +365,12 @@ void test_inplace_merge_bad_alloc_async(ExPolicy policy, IteratorTag)
     HPX_TEST(returned_from_algorithm);
 }
 
+std::ostream& operator<<(std::ostream& os, user_defined_type const& e)
+{
+    os << "(" << e.val << ", " << e.name << ")";
+    return os;
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 template <typename ExPolicy, typename IteratorTag, typename DataType>
 void test_inplace_merge_etc(ExPolicy policy, IteratorTag,
@@ -378,7 +384,7 @@ void test_inplace_merge_etc(ExPolicy policy, IteratorTag,
 
     using hpx::util::get;
 
-    std::size_t const left_size = 300007, right_size = 123456;
+    std::size_t const left_size = 7, right_size = 6;
     std::vector<DataType> res(left_size + right_size), sol, org;
 
     base_iterator res_first = std::begin(res);
@@ -430,6 +436,15 @@ void test_inplace_merge_etc(ExPolicy policy, IteratorTag,
                 return val;
             });
 
+        std::cout << "Res : ";
+        for (auto const& e : res)
+            std::cout << e << ", ";
+        std::cout << std::endl;
+
+        std::cout << "Sol : ";
+        for (auto const& e : sol)
+            std::cout << e << ", ";
+        std::cout << std::endl;
         // The container must not be changed.
         bool equality = std::equal(
             res_first, res_last,
